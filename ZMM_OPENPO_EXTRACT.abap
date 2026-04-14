@@ -530,6 +530,7 @@ CLASS lcl_events IMPLEMENTATION.
       IF sy-subrc = 0.
         <ls_item_data>-charg = ls_eket-charg.
         <ls_item_data>-licha = ls_eket-licha.
+        <ls_item_data>-ldate = ls_eket-eindt.
       ENDIF.
     ENDLOOP.
 
