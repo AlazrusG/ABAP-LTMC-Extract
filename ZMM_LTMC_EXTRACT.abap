@@ -4,7 +4,7 @@
 *& Extract OPEN PO data and display it in a ALV
 *&---------------------------------------------------------------------*
 
-REPORT zmm_openpo_extract.
+REPORT zmm_ltmc_extract.
 
 TABLES: ekko, ekpo.
 
