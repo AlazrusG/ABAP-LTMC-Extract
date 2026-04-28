@@ -329,7 +329,7 @@ CLASS lcl_events IMPLEMENTATION.
 
     CHECK gt_ekko IS NOT INITIAL.
 
-    DATA lt_ebeln TYPE SORTED TABLE OF ekko-ebeln WITH UNIQUE KEY table_line.
+    DATA lt_ebeln TYPE TABLE OF ekko-ebeln.
     LOOP AT gt_ekko INTO DATA(ls_ekko).
       APPEND ls_ekko-ebeln TO lt_ebeln.
     ENDLOOP.
