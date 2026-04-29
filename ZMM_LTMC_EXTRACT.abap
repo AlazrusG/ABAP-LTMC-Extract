@@ -1,7 +1,10 @@
 *&---------------------------------------------------------------------*
 *& Report  ZMM_LTMC_EXTRACT
 *&---------------------------------------------------------------------*
-*& Extract OPEN PO data and display it in a ALV
+*&  Extract OPEN PO data and display it in a ALV
+*&
+*&  When moving from test system to client
+*&  extra fields should be uncommented in TYPES
 *&---------------------------------------------------------------------*
 
 REPORT zmm_ltmc_extract.
@@ -14,8 +17,8 @@ SELECT-OPTIONS:
   s_bukrs FOR ekko-bukrs,
   s_bstyp FOR ekko-bstyp,
   s_bsart FOR ekko-bsart,
-  s_aedat FOR ekko-aedat,
   s_lifnr FOR ekko-lifnr,
+  s_aedat FOR ekko-aedat,
   s_reswk FOR ekko-reswk,
   s_ekorg FOR ekko-ekorg,
   s_ekgrp FOR ekko-ekgrp.
@@ -27,213 +30,269 @@ SELECT-OPTIONS:
   s_knttp FOR ekpo-knttp,
   s_matkl FOR ekpo-matkl.
 SELECTION-SCREEN END OF BLOCK b2.
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE text-003.
+SELECT-OPTIONS:
+  s_mlifnr FOR ekko-lifnr,
+  s_mmatnr FOR ekpo-matnr,
+  s_mmatkl FOR ekpo-matkl.
+PARAMETERS:
+  p_xmatkl TYPE abap_bool AS CHECKBOX.
+SELECTION-SCREEN END OF BLOCK b3.
 SELECTION-SCREEN END OF BLOCK b1.
 
-TYPES:
-  BEGIN OF ty_header_data,
-    ebeln   TYPE ekko-ebeln,
-    bukrs   TYPE ekko-bukrs,
-    bsart   TYPE ekko-bsart,
-    lifnr   TYPE ekko-lifnr,
-    ekorg   TYPE ekko-ekorg,
-    ekgrp   TYPE ekko-ekgrp,
-    bedat   TYPE ekko-bedat,
-    zterm   TYPE ekko-zterm,
-    zbd1t   TYPE ekko-zbd1t,
-    zbd2t   TYPE ekko-zbd2t,
-    zbd3t   TYPE ekko-zbd3t,
-    zbd1p   TYPE ekko-zbd1p,
-    zbd2p   TYPE ekko-zbd2p,
-    waers   TYPE ekko-waers,
-    " Keep raw sign in ALV by avoiding EXCRT conversion exit from DDIC type EKKO-WKURS
-    wkurs   TYPE p LENGTH 8 DECIMALS 5,
-    lifre   TYPE ekko-lifre,
-    incov   TYPE ekko-incov,
-    inco1   TYPE ekko-inco1,
-    inco2_l TYPE ekko-inco2_l,
-    inco3_l TYPE ekko-inco3_l,
-    verkf   TYPE ekko-verkf,
-    telf1   TYPE ekko-telf1,
-    ihrez   TYPE ekko-ihrez,
-    unsez   TYPE ekko-unsez,
-    stceg_l TYPE ekko-stceg_l,
-  END OF ty_header_data,
+INITIALIZATION.
 
-  BEGIN OF ty_header_address,
-    ebeln      TYPE ekko-ebeln,
-    city1      TYPE adrc-city1,
-    post_code1 TYPE adrc-post_code1,
-    street     TYPE adrc-street,
-    house_num1 TYPE adrc-house_num1,
-    country    TYPE adrc-country,
-    region     TYPE adrc-region,
-    tel_number TYPE adrc-tel_number,
-    fax_number TYPE adrc-fax_number,
-    name1      TYPE adrc-name1,
-  END OF ty_header_address,
+  " Restrict Range for converting ECC to S/4 values
+  DATA: gs_restrict TYPE sscr_restrict.
+  DATA: gt_selopt TYPE TABLE OF rsldbselop.
 
-  BEGIN OF ty_header_text,
-    ebeln      TYPE ekko-ebeln,
-    tdid       TYPE rstxt-tdid,
-    text_lines TYPE string,
-  END OF ty_header_text,
+  DATA: gt_assignment TYPE TABLE OF sscr_ass_tab,
+        gt_opt_list   TYPE TABLE OF sscr_opt_list_tab.
 
-  BEGIN OF ty_item_data,
-    ebeln            TYPE ekpo-ebeln,
-    ebelp            TYPE ekpo-ebelp,
-    pstyp            TYPE ekpo-pstyp,
-    knttp            TYPE ekpo-knttp,
-    matnr            TYPE ekpo-matnr,
-    txz01            TYPE ekpo-txz01,
-    werks            TYPE ekpo-werks,
-    lgort            TYPE ekpo-lgort,
-    charg            TYPE eket-charg,
-    licha            TYPE eket-licha,
-    matkl            TYPE ekpo-matkl,
-    producttype      TYPE char10, "optional field s4
-    afnam            TYPE ekpo-afnam,
-    idnlf            TYPE ekpo-idnlf,
-    menge            TYPE ekpo-menge,
-    meins            TYPE ekpo-meins,
-    bprme            TYPE ekpo-bprme,
-    bpumz            TYPE ekpo-bpumz,
-    bpumn            TYPE ekpo-bpumn,
-    ldate            TYPE eket-eindt,
-    netpr            TYPE ekpo-netpr,
-    peinh            TYPE ekpo-peinh,
-    bstae            TYPE ekpo-bstae,
-    mwskz            TYPE ekpo-mwskz,
-    txjcd            TYPE ekpo-txjcd,
-    uebto            TYPE ekpo-uebto,
-    uebtk            TYPE ekpo-uebtk,
-    untto            TYPE ekpo-untto,
-    evers            TYPE ekpo-evers,
-    mahn1            TYPE ekpo-mahn1,
-    mahn2            TYPE ekpo-mahn2,
-    mahn3            TYPE ekpo-mahn3,
-    plifz            TYPE ekpo-plifz,
-    bwtar            TYPE ekpo-bwtar,
-    elikz            TYPE ekpo-elikz,
-    erekz            TYPE ekpo-erekz,
-    wepos            TYPE ekpo-wepos,
-    weunb            TYPE ekpo-weunb,
-    repos            TYPE ekpo-repos,
-    webre            TYPE ekpo-webre,
-    retpo            TYPE ekpo-retpo,
-    vrtkz            TYPE ekpo-vrtkz,
-    twrkz            TYPE ekpo-twrkz,
-    inco1            TYPE ekpo-inco1,
-    inco2_l          TYPE ekpo-inco2_l,
-    inco3_l          TYPE ekpo-inco3_l,
-    exp_value        TYPE char10,
-    limit_amount     TYPE char10,
-    emlif            TYPE ekpo-emlif,
-    lblkz            TYPE ekpo-lblkz,
-    kunnr            TYPE ekpo-kunnr,
-    konnr            TYPE ekpo-konnr,
-    ktpnr            TYPE ekpo-ktpnr,
-    serviceperformer TYPE char10,
-    startdate        TYPE char10,
-    enddate          TYPE char10,
-  END OF ty_item_data,
+  DATA gt_select_fields TYPE STANDARD TABLE OF rsrestrict-objectname
+        WITH EMPTY KEY.
+  " Mapping fields for our select-options
+  gt_select_fields = VALUE #(
+    ( 'S_MLIFNR' )
+    ( 'S_MMATNR' )
+    ( 'S_MMATKL' ) ).
 
-  BEGIN OF ty_item_address,
-    ebeln      TYPE ekko-ebeln,
-    ebelp      TYPE ekpo-ebelp,
-    city1      TYPE adrc-city1,
-    post_code1 TYPE adrc-post_code1,
-    street     TYPE adrc-street,
-    house_num1 TYPE adrc-house_num1,
-    country    TYPE adrc-country,
-    region     TYPE adrc-region,
-    tel_number TYPE adrc-tel_number,
-    fax_number TYPE adrc-fax_number,
-    name1      TYPE adrc-name1,
-  END OF ty_item_address,
+  APPEND INITIAL LINE TO gs_restrict-opt_list_tab
+  ASSIGNING FIELD-SYMBOL(<fs_opt_list>).
+  <fs_opt_list>-name = 'VENDOR'.
+  <fs_opt_list>-options-bt = abap_true.
 
-  BEGIN OF ty_account_assignment,
-    ebeln      TYPE ekkn-ebeln,
-    ebelp      TYPE ekkn-ebelp,
-    zekkn      TYPE ekkn-zekkn,
-    menge      TYPE ekkn-menge,
-    vproz      TYPE ekkn-vproz,
-    netwr      TYPE ekkn-netwr,
-    sakto      TYPE ekkn-sakto,
-    kostl      TYPE ekkn-kostl,
-    prctr      TYPE ekkn-prctr,
-    aufnr      TYPE ekkn-aufnr,
-    WBS_ELEMENT TYPE ekkn-ps_psp_pnr,
-    vbeln      TYPE ekkn-vbeln,
-    vbelp      TYPE ekkn-vbelp,
-    ETENR      TYPE ekkn-veten,
-    ASSET_NO      TYPE ekkn-anln1,
-    SUB_NUMBER      TYPE ekkn-anln2,
-    fkber      TYPE ekkn-fkber,
-  END OF ty_account_assignment,
+  LOOP AT gt_select_fields INTO DATA(gv_select_field).
+    APPEND INITIAL LINE TO gs_restrict-ass_tab
+    ASSIGNING FIELD-SYMBOL(<fs_assignment>).
+    <fs_assignment>-kind = 'S'.
+    <fs_assignment>-name = gv_select_field.
+    <fs_assignment>-sg_main = 'I'.
+    <fs_assignment>-sg_addy = space.
+    <fs_assignment>-op_main = 'VENDOR'.
 
-  BEGIN OF ty_schedule_line,
-    ebeln TYPE eket-ebeln,
-    ebelp TYPE eket-ebelp,
-    etenr TYPE eket-etenr,
-    eindt TYPE eket-eindt,
-    menge TYPE eket-menge,
-  END OF ty_schedule_line,
+    APPEND INITIAL LINE TO gt_selopt
+    ASSIGNING FIELD-SYMBOL(<fs_selopt>).
+    <fs_selopt>-name = gv_select_field.
+  ENDLOOP.
 
-  BEGIN OF ty_subcontracting,
-    ebeln TYPE ekko-ebeln,
-    ebelp TYPE ekpo-ebelp,
-    etenr TYPE eket-etenr,
-    ebele TYPE resb-ebele,
-    matnr TYPE resb-matnr,
-    werks TYPE resb-werks,
-    lgort TYPE resb-lgort,
-    bdmng TYPE resb-bdmng,
-    meins TYPE resb-meins,
-    bdter TYPE resb-bdter,
-  END OF ty_subcontracting,
+  CALL FUNCTION 'RS_SELOPT_NO_INTERVAL_CHECK'
+    EXPORTING
+      program = 'ZMM_LTMC_EXTRACT'
+    TABLES
+      selop   = gt_selopt .
 
-  BEGIN OF ty_item_text,
-    ebeln      TYPE ekko-ebeln,
-    ebelp      TYPE ekpo-ebelp,
-    tdid       TYPE rstxt-tdid,
-    text_lines TYPE string,
-  END OF ty_item_text,
+  CALL FUNCTION 'SELECT_OPTIONS_RESTRICT'
+    EXPORTING
+      restriction = gs_restrict.
 
-  BEGIN OF ty_adrc_lookup,
-           addrnumber TYPE adrc-addrnumber,
-           city1      TYPE adrc-city1,
-           post_code1 TYPE adrc-post_code1,
-           street     TYPE adrc-street,
-           house_num1 TYPE adrc-house_num1,
-           country    TYPE adrc-country,
-           region     TYPE adrc-region,
-           tel_number TYPE adrc-tel_number,
-           fax_number TYPE adrc-fax_number,
-           name1      TYPE adrc-name1,
-   END OF ty_adrc_lookup.
+  " End of range restriction.
 
-DATA:
-  gt_ekko               TYPE TABLE OF ekko,
-  gt_ekpo               TYPE TABLE OF ekpo,
-  gt_eket               TYPE TABLE OF eket,
+  TYPES:
+    BEGIN OF ty_header_data,
+      ebeln   TYPE ekko-ebeln,
+      bukrs   TYPE ekko-bukrs,
+      bsart   TYPE ekko-bsart,
+      lifnr   TYPE ekko-lifnr,
+      ekorg   TYPE ekko-ekorg,
+      ekgrp   TYPE ekko-ekgrp,
+      bedat   TYPE ekko-bedat,
+      zterm   TYPE ekko-zterm,
+      zbd1t   TYPE ekko-zbd1t,
+      zbd2t   TYPE ekko-zbd2t,
+      zbd3t   TYPE ekko-zbd3t,
+      zbd1p   TYPE ekko-zbd1p,
+      zbd2p   TYPE ekko-zbd2p,
+      waers   TYPE ekko-waers,
+      " Keep raw sign in ALV by avoiding EXCRT conversion exit from DDIC type EKKO-WKURS
+      wkurs   TYPE p LENGTH 8 DECIMALS 5,
+      lifre   TYPE ekko-lifre,
+*    incov   TYPE ekko-incov,
+      inco1   TYPE ekko-inco1,
+*    inco2_l TYPE ekko-inco2_l,
+*    inco3_l TYPE ekko-inco3_l,
+      verkf   TYPE ekko-verkf,
+      telf1   TYPE ekko-telf1,
+      ihrez   TYPE ekko-ihrez,
+      unsez   TYPE ekko-unsez,
+      stceg_l TYPE ekko-stceg_l,
+    END OF ty_header_data,
 
-  gt_header_data        TYPE TABLE OF ty_header_data,
-  gt_header_address     TYPE TABLE OF ty_header_address,
-  gt_header_texts       TYPE TABLE OF ty_header_text,
-  gt_item_data          TYPE TABLE OF ty_item_data,
-  gt_item_address       TYPE TABLE OF ty_item_address,
-  gt_account_assignment TYPE TABLE OF ty_account_assignment,
-  gt_item_texts         TYPE TABLE OF ty_item_text,
-  gt_schedule_line      TYPE TABLE OF ty_schedule_line,
-  gt_subcontracting     TYPE TABLE OF ty_subcontracting.
+    BEGIN OF ty_header_address,
+      ebeln      TYPE ekko-ebeln,
+      city1      TYPE adrc-city1,
+      post_code1 TYPE adrc-post_code1,
+      street     TYPE adrc-street,
+      house_num1 TYPE adrc-house_num1,
+      country    TYPE adrc-country,
+      region     TYPE adrc-region,
+      tel_number TYPE adrc-tel_number,
+      fax_number TYPE adrc-fax_number,
+      name1      TYPE adrc-name1,
+    END OF ty_header_address,
 
+    BEGIN OF ty_header_text,
+      ebeln      TYPE ekko-ebeln,
+      tdid       TYPE rstxt-tdid,
+      text_lines TYPE string,
+    END OF ty_header_text,
+
+    BEGIN OF ty_item_data,
+      ebeln            TYPE ekpo-ebeln,
+      ebelp            TYPE ekpo-ebelp,
+      pstyp            TYPE ekpo-pstyp,
+      knttp            TYPE ekpo-knttp,
+      matnr            TYPE ekpo-matnr,
+      txz01            TYPE ekpo-txz01,
+      werks            TYPE ekpo-werks,
+      lgort            TYPE ekpo-lgort,
+      charg            TYPE eket-charg,
+      licha            TYPE eket-licha,
+      matkl            TYPE ekpo-matkl,
+      producttype      TYPE char10, "optional field s4
+      afnam            TYPE ekpo-afnam,
+      idnlf            TYPE ekpo-idnlf,
+      menge            TYPE ekpo-menge,
+      meins            TYPE ekpo-meins,
+      bprme            TYPE ekpo-bprme,
+      bpumz            TYPE ekpo-bpumz,
+      bpumn            TYPE ekpo-bpumn,
+      ldate            TYPE eket-eindt,
+      netpr            TYPE ekpo-netpr,
+      peinh            TYPE ekpo-peinh,
+      bstae            TYPE ekpo-bstae,
+      mwskz            TYPE ekpo-mwskz,
+      txjcd            TYPE ekpo-txjcd,
+      uebto            TYPE ekpo-uebto,
+      uebtk            TYPE ekpo-uebtk,
+      untto            TYPE ekpo-untto,
+      evers            TYPE ekpo-evers,
+      mahn1            TYPE ekpo-mahn1,
+      mahn2            TYPE ekpo-mahn2,
+      mahn3            TYPE ekpo-mahn3,
+      plifz            TYPE ekpo-plifz,
+      bwtar            TYPE ekpo-bwtar,
+      elikz            TYPE ekpo-elikz,
+      erekz            TYPE ekpo-erekz,
+      wepos            TYPE ekpo-wepos,
+      weunb            TYPE ekpo-weunb,
+      repos            TYPE ekpo-repos,
+      webre            TYPE ekpo-webre,
+      retpo            TYPE ekpo-retpo,
+      vrtkz            TYPE ekpo-vrtkz,
+      twrkz            TYPE ekpo-twrkz,
+      inco1            TYPE ekpo-inco1,
+*    inco2_l          TYPE ekpo-inco2_l,
+*    inco3_l          TYPE ekpo-inco3_l,
+      exp_value        TYPE char10,
+      limit_amount     TYPE char10,
+      emlif            TYPE ekpo-emlif,
+      lblkz            TYPE ekpo-lblkz,
+      kunnr            TYPE ekpo-kunnr,
+      konnr            TYPE ekpo-konnr,
+      ktpnr            TYPE ekpo-ktpnr,
+      serviceperformer TYPE char10,
+      startdate        TYPE char10,
+      enddate          TYPE char10,
+    END OF ty_item_data,
+
+    BEGIN OF ty_item_address,
+      ebeln      TYPE ekko-ebeln,
+      ebelp      TYPE ekpo-ebelp,
+      city1      TYPE adrc-city1,
+      post_code1 TYPE adrc-post_code1,
+      street     TYPE adrc-street,
+      house_num1 TYPE adrc-house_num1,
+      country    TYPE adrc-country,
+      region     TYPE adrc-region,
+      tel_number TYPE adrc-tel_number,
+      fax_number TYPE adrc-fax_number,
+      name1      TYPE adrc-name1,
+    END OF ty_item_address,
+
+    BEGIN OF ty_account_assignment,
+      ebeln       TYPE ekkn-ebeln,
+      ebelp       TYPE ekkn-ebelp,
+      zekkn       TYPE ekkn-zekkn,
+      menge       TYPE ekkn-menge,
+      vproz       TYPE ekkn-vproz,
+      netwr       TYPE ekkn-netwr,
+      sakto       TYPE ekkn-sakto,
+      kostl       TYPE ekkn-kostl,
+      prctr       TYPE ekkn-prctr,
+      aufnr       TYPE ekkn-aufnr,
+      wbs_element TYPE ekkn-ps_psp_pnr,
+      vbeln       TYPE ekkn-vbeln,
+      vbelp       TYPE ekkn-vbelp,
+      etenr       TYPE ekkn-veten,
+      asset_no    TYPE ekkn-anln1,
+      sub_number  TYPE ekkn-anln2,
+      fkber       TYPE ekkn-fkber,
+    END OF ty_account_assignment,
+
+    BEGIN OF ty_schedule_line,
+      ebeln TYPE eket-ebeln,
+      ebelp TYPE eket-ebelp,
+      etenr TYPE eket-etenr,
+      eindt TYPE eket-eindt,
+      menge TYPE eket-menge,
+    END OF ty_schedule_line,
+
+    BEGIN OF ty_subcontracting,
+      ebeln TYPE ekko-ebeln,
+      ebelp TYPE ekpo-ebelp,
+      etenr TYPE eket-etenr,
+      ebele TYPE resb-ebele,
+      matnr TYPE resb-matnr,
+      werks TYPE resb-werks,
+      lgort TYPE resb-lgort,
+      bdmng TYPE resb-bdmng,
+      meins TYPE resb-meins,
+      bdter TYPE resb-bdter,
+    END OF ty_subcontracting,
+
+    BEGIN OF ty_item_text,
+      ebeln      TYPE ekko-ebeln,
+      ebelp      TYPE ekpo-ebelp,
+      tdid       TYPE rstxt-tdid,
+      text_lines TYPE string,
+    END OF ty_item_text,
+
+    BEGIN OF ty_adrc_lookup,
+      addrnumber TYPE adrc-addrnumber,
+      city1      TYPE adrc-city1,
+      post_code1 TYPE adrc-post_code1,
+      street     TYPE adrc-street,
+      house_num1 TYPE adrc-house_num1,
+      country    TYPE adrc-country,
+      region     TYPE adrc-region,
+      tel_number TYPE adrc-tel_number,
+      fax_number TYPE adrc-fax_number,
+      name1      TYPE adrc-name1,
+    END OF ty_adrc_lookup.
+
+  DATA:
+    gt_ekko               TYPE TABLE OF ekko,
+    gt_ekpo               TYPE TABLE OF ekpo,
+    gt_eket               TYPE TABLE OF eket,
+
+    gt_header_data        TYPE TABLE OF ty_header_data,
+    gt_header_address     TYPE TABLE OF ty_header_address,
+    gt_header_texts       TYPE TABLE OF ty_header_text,
+    gt_item_data          TYPE TABLE OF ty_item_data,
+    gt_item_address       TYPE TABLE OF ty_item_address,
+    gt_account_assignment TYPE TABLE OF ty_account_assignment,
+    gt_item_texts         TYPE TABLE OF ty_item_text,
+    gt_schedule_line      TYPE TABLE OF ty_schedule_line,
+    gt_subcontracting     TYPE TABLE OF ty_subcontracting.
 
 * Each entry for the cl_gui_container_bar is a single button
 
-DATA: go_salv_table      TYPE REF TO cl_salv_table,
-      go_splitter        TYPE REF TO cl_gui_splitter_container,
-      go_container_right TYPE REF TO cl_gui_container,
-      go_container_left  TYPE REF TO cl_gui_container.
+  DATA: go_salv_table      TYPE REF TO cl_salv_table,
+        go_splitter        TYPE REF TO cl_gui_splitter_container,
+        go_container_right TYPE REF TO cl_gui_container,
+        go_container_left  TYPE REF TO cl_gui_container.
+
 
 CLASS lcl_events DEFINITION.
   PUBLIC SECTION.
@@ -248,6 +307,11 @@ CLASS lcl_events DEFINITION.
       get_schedule_line,
       get_subcontracting,
       get_item_texts,
+      convert_fields,
+      convert_lifnr,
+      convert_matnr,
+      convert_matkl,
+      dynamic_conversion,
       build_gui,
       display_data
         CHANGING
@@ -266,6 +330,18 @@ CLASS lcl_events IMPLEMENTATION.
 
     " assume open PO delivery not complete and not deleted
     " SAP in ME2N Defines OPEN PO as delivery not complete, deleted and not fully invoiced,
+
+*    DATA: lr_lifnr_range LIKE         s_lifnr[],
+*          ls_lifnr_range LIKE LINE OF lr_lifnr_range.
+*
+*    LOOP AT s_lifnr[] INTO DATA(ls_lifnr).
+*      ls_lifnr_range-sign = 'I'.
+*      ls_lifnr_range-option = 'EQ'.
+*      ls_lifnr_range-low = ls_lifnr-low.
+*      APPEND ls_lifnr_range TO lr_lifnr_range.
+*    ENDLOOP.
+
+
     SELECT *
      FROM ekpo
      INTO CORRESPONDING FIELDS OF TABLE gt_ekpo
@@ -306,6 +382,7 @@ CLASS lcl_events IMPLEMENTATION.
     get_schedule_line( ).
     get_subcontracting( ).
     get_item_texts( ).
+    convert_fields( ).
 
   ENDMETHOD.
   METHOD get_header_data.
@@ -329,9 +406,11 @@ CLASS lcl_events IMPLEMENTATION.
 
     CHECK gt_ekko IS NOT INITIAL.
 
-    DATA lt_ebeln TYPE TABLE OF ekko-ebeln.
+    DATA lt_ebeln TYPE SORTED TABLE OF ekko-ebeln
+                  WITH UNIQUE KEY table_line.
+
     LOOP AT gt_ekko INTO DATA(ls_ekko).
-      APPEND ls_ekko-ebeln TO lt_ebeln.
+      INSERT ls_ekko-ebeln INTO TABLE lt_ebeln.
     ENDLOOP.
 
     SELECT
@@ -460,21 +539,21 @@ CLASS lcl_events IMPLEMENTATION.
       READ TABLE lt_adrc
       INTO DATA(ls_adrc)
       WITH TABLE KEY addrnumber = ls_ekpo-adrnr.
-     IF sy-subrc = 0.
-          APPEND VALUE ty_item_address(
-            ebeln      = ls_ekpo-ebeln
-            ebelp      = ls_ekpo-ebelp
-            city1      = ls_adrc-city1
-            post_code1 = ls_adrc-post_code1
-            street     = ls_adrc-street
-            house_num1 = ls_adrc-house_num1
-            country    = ls_adrc-country
-            region     = ls_adrc-region
-            tel_number = ls_adrc-tel_number
-            fax_number = ls_adrc-fax_number
-            name1      = ls_adrc-name1 ) TO gt_item_address.
-        ENDIF.
-  ENDLOOP.
+      IF sy-subrc = 0.
+        APPEND VALUE ty_item_address(
+          ebeln      = ls_ekpo-ebeln
+          ebelp      = ls_ekpo-ebelp
+          city1      = ls_adrc-city1
+          post_code1 = ls_adrc-post_code1
+          street     = ls_adrc-street
+          house_num1 = ls_adrc-house_num1
+          country    = ls_adrc-country
+          region     = ls_adrc-region
+          tel_number = ls_adrc-tel_number
+          fax_number = ls_adrc-fax_number
+          name1      = ls_adrc-name1 ) TO gt_item_address.
+      ENDIF.
+    ENDLOOP.
 
   ENDMETHOD.
 
@@ -623,6 +702,141 @@ CLASS lcl_events IMPLEMENTATION.
       CLEAR: lt_lines.
     ENDLOOP.
 
+  ENDMETHOD.
+
+  METHOD convert_fields.
+    " Optional: remove matkl when there is matnr, leave if matnr is blank
+    IF p_xmatkl = abap_true.
+      LOOP AT gt_item_data ASSIGNING FIELD-SYMBOL(<ls_item_data>)
+        WHERE matnr IS NOT INITIAL.
+          <ls_item_data>-matkl = space.
+      ENDLOOP.
+    ENDIF.
+    IF s_mlifnr IS NOT INITIAL
+      OR s_mmatnr IS NOT INITIAL
+      OR s_mmatkl IS NOT INITIAL.
+      convert_lifnr( ).
+      convert_matnr( ).
+      convert_matkl( ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD convert_lifnr.
+
+    TYPES: BEGIN OF ty_lifnr_line,
+             low  TYPE ekko-lifnr,
+             high TYPE c LENGTH 10,
+           END OF ty_lifnr_line.
+
+    DATA: lt_lifnr_map  TYPE HASHED TABLE OF ty_lifnr_line
+                        WITH UNIQUE KEY low,
+          ls_lifnr_line LIKE LINE OF         lt_lifnr_map.
+
+    LOOP AT s_mlifnr[] INTO DATA(ls_lifnr).
+      ls_lifnr_line-low = ls_lifnr-low.
+      ls_lifnr_line-high = ls_lifnr-high.
+      INSERT ls_lifnr_line INTO TABLE lt_lifnr_map.
+    ENDLOOP.
+
+    FIELD-SYMBOLS: <fs_header_data> TYPE ty_header_data.
+
+    LOOP AT gt_header_data ASSIGNING <fs_header_data>.
+      IF <fs_header_data>-lifnr IS NOT INITIAL.
+        READ TABLE lt_lifnr_map
+        WITH TABLE KEY low = <fs_header_data>-lifnr
+        TRANSPORTING NO FIELDS.
+        IF sy-subrc = 0.
+          READ TABLE lt_lifnr_map
+          INTO ls_lifnr_line
+          WITH TABLE KEY low = <fs_header_data>-lifnr.
+          <fs_header_data>-lifnr = ls_lifnr_line-high.
+        ELSE.
+          " Indicate this value has not been mapped to S/4
+          <fs_header_data>-lifnr+0(2) = 'NC'.
+        ENDIF.
+
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+  METHOD convert_matnr.
+    TYPES: BEGIN OF ty_matnr_line,
+             low  TYPE ekpo-matnr,
+             high TYPE c LENGTH 18,
+           END OF ty_matnr_line.
+
+    DATA: lt_matnr_map  TYPE HASHED TABLE OF ty_matnr_line
+                        WITH UNIQUE KEY low,
+          ls_matnr_line LIKE LINE OF         lt_matnr_map.
+
+    LOOP AT s_mmatnr[] INTO DATA(ls_matnr).
+      ls_matnr_line-low = ls_matnr-low.
+      ls_matnr_line-high = ls_matnr-high.
+      INSERT ls_matnr_line INTO TABLE lt_matnr_map.
+    ENDLOOP.
+
+    FIELD-SYMBOLS: <fs_item_data> TYPE ty_item_data.
+
+    LOOP AT gt_item_data ASSIGNING <fs_item_data>.
+      IF <fs_item_data>-matnr IS NOT INITIAL.
+        READ TABLE lt_matnr_map
+        WITH TABLE KEY low = <fs_item_data>-matnr
+        TRANSPORTING NO FIELDS.
+        IF sy-subrc = 0.
+          READ TABLE lt_matnr_map
+          INTO ls_matnr_line
+          WITH TABLE KEY low = <fs_item_data>-matnr.
+          <fs_item_data>-matnr = ls_matnr_line-high.
+        ELSE.
+          " Indicate this value has not been mapped to S/4
+          <fs_item_data>-matnr+0(2) = 'NC'.
+        ENDIF.
+
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD convert_matkl.
+
+    TYPES: BEGIN OF ty_matkl_line,
+             low  TYPE ekpo-matkl,
+             high TYPE c LENGTH 9,
+           END OF ty_matkl_line.
+
+    DATA: lt_matkl_map  TYPE HASHED TABLE OF ty_matkl_line
+                        WITH UNIQUE KEY low,
+          ls_matkl_line LIKE LINE OF         lt_matkl_map.
+
+    LOOP AT s_mmatkl[] INTO DATA(ls_matkl).
+      ls_matkl_line-low = ls_matkl-low.
+      ls_matkl_line-high = ls_matkl-high.
+      INSERT ls_matkl_line INTO TABLE lt_matkl_map.
+    ENDLOOP.
+
+    FIELD-SYMBOLS: <fs_item_data> TYPE ty_item_data.
+
+    LOOP AT gt_item_data ASSIGNING <fs_item_data>.
+      IF <fs_item_data>-matkl IS NOT INITIAL.
+        READ TABLE lt_matkl_map
+        WITH TABLE KEY low = <fs_item_data>-matkl
+        TRANSPORTING NO FIELDS.
+        IF sy-subrc = 0.
+          READ TABLE lt_matkl_map
+          INTO ls_matkl_line
+          WITH TABLE KEY low = <fs_item_data>-matkl.
+          <fs_item_data>-matkl = ls_matkl_line-high.
+        ELSE.
+          " Indicate this value has not been mapped to S/4
+          <fs_item_data>-matkl+0(2) = 'NC'.
+        ENDIF.
+
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD dynamic_conversion.
+    " Placeholder Method
   ENDMETHOD.
 
   METHOD build_gui.
@@ -787,6 +1001,13 @@ CLASS lcl_events IMPLEMENTATION.
             CATCH cx_salv_not_found.
           ENDTRY.
         ENDLOOP.
+        " Conversion exits to internal values for MATNR
+        TRY.
+            lo_col ?= lo_columns->get_column( 'MATNR' ).
+            lo_col->set_edit_mask( '' ).
+          CATCH cx_salv_not_found.
+        ENDTRY.
+
         go_salv_table->refresh( refresh_mode = if_salv_c_refresh=>soft ).
         go_salv_table->display( ).
 
