@@ -1,12 +1,17 @@
 *&---------------------------------------------------------------------*
 *& Report  ZSD_LTMC_EXTRACT
 *&---------------------------------------------------------------------*
-*& Extract OPEN Sales Order data and display it in a ALV
+*&  Extract OPEN Sales Order data and display it in a ALV
+*&
+*&  When moving from test system to client
+*&  extra fields should be uncommented in TYPES
 *&---------------------------------------------------------------------*
 
 REPORT zsd_ltmc_extract.
 
 TABLES: vbak, vbap, vbup.
+
+DATA lv_char18 TYPE char18.
 
 SELECTION-SCREEN BEGIN OF BLOCK main WITH FRAME TITLE text-t01.
 SELECT-OPTIONS:
@@ -38,6 +43,11 @@ SELECT-OPTIONS:
   s_lfgsa FOR vbup-lfgsa DEFAULT 'B' SIGN E OPTION EQ,
   s_gbsta FOR vbup-gbsta.
 SELECTION-SCREEN END OF BLOCK item_status.
+SELECTION-SCREEN BEGIN OF BLOCK mapping WITH FRAME TITLE text-t04.
+SELECT-OPTIONS:
+  s_mkunnr FOR vbak-kunnr,
+  s_mmatnr FOR lv_char18. "vbap-matnr,
+SELECTION-SCREEN END OF BLOCK mapping.
 SELECTION-SCREEN END OF BLOCK main.
 
 TYPES:
@@ -96,7 +106,7 @@ TYPES:
     posnr      TYPE vbap-posnr,
     hg_lv_item TYPE vbap-uepos,
     posex      TYPE vbap-posex,
-    matnr      TYPE vbap-matnr,
+    matnr      TYPE char21,       "vbap-matnr,
     zieme      TYPE vbap-zieme,
     umziz      TYPE vbap-umziz,
     umzin      TYPE vbap-umzin,
@@ -138,7 +148,7 @@ TYPES:
     vbeln         TYPE vbpa-vbeln,
     posnr         TYPE vbpa-posnr,
     parvw         TYPE vbpa-parvw,
-    kunnr         TYPE vbpa-kunnr,
+    kunnr         TYPE char13, "vbpa-kunnr,
     extaddrnumber TYPE vbpa-adrnr,
     street        TYPE adrc-street,
     postl_code    TYPE adrc-post_code1,
@@ -184,6 +194,7 @@ CLASS lcl_events DEFINITION FINAL.
 
   PUBLIC SECTION.
     CLASS-METHODS:
+      initialization,
       get_data,
       get_header_data,
       get_header_conditions,
@@ -193,6 +204,9 @@ CLASS lcl_events DEFINITION FINAL.
       get_item_texts,
       get_partner_data,
       get_schedule_line_data,
+      convert_fields,
+      convert_kunnr,
+      convert_matnr,
       display_data
         CHANGING
           pt_data TYPE ANY TABLE,
@@ -206,6 +220,57 @@ CLASS lcl_events DEFINITION FINAL.
 ENDCLASS.
 
 CLASS lcl_events IMPLEMENTATION.
+
+  METHOD initialization.
+
+    DATA(LV_CURRENT_PROGRAM) = CL_ABAP_SYST=>GET_CURRENT_PROGRAM( ).
+
+    " Restrict Range for converting ECC to S/4 values
+    DATA: gs_restrict TYPE sscr_restrict.
+    DATA: gt_selopt TYPE TABLE OF rsldbselop.
+
+    DATA: gt_assignment TYPE TABLE OF sscr_ass_tab,
+          gt_opt_list   TYPE TABLE OF sscr_opt_list_tab.
+
+    DATA gt_select_fields TYPE STANDARD TABLE OF rsrestrict-objectname
+          WITH EMPTY KEY.
+    " Mapping fields for our select-options
+    gt_select_fields = VALUE #(
+      ( 'S_MKUNNR' )
+      ( 'S_MMATNR' ) ).
+
+    APPEND INITIAL LINE TO gs_restrict-opt_list_tab
+    ASSIGNING FIELD-SYMBOL(<fs_opt_list>).
+    <fs_opt_list>-name = 'MAPPING'.
+    <fs_opt_list>-options-bt = abap_true.
+
+    LOOP AT gt_select_fields INTO DATA(gv_select_field).
+      APPEND INITIAL LINE TO gs_restrict-ass_tab
+      ASSIGNING FIELD-SYMBOL(<fs_assignment>).
+      <fs_assignment>-kind = 'S'.
+      <fs_assignment>-name = gv_select_field.
+      <fs_assignment>-sg_main = 'I'.
+      <fs_assignment>-sg_addy = space.
+      <fs_assignment>-op_main = 'MAPPING'.
+
+      APPEND INITIAL LINE TO gt_selopt
+      ASSIGNING FIELD-SYMBOL(<fs_selopt>).
+      <fs_selopt>-name = gv_select_field.
+    ENDLOOP.
+
+    CALL FUNCTION 'RS_SELOPT_NO_INTERVAL_CHECK'
+      EXPORTING
+        program = LV_CURRENT_PROGRAM
+      TABLES
+        selop   = gt_selopt.
+
+    CALL FUNCTION 'SELECT_OPTIONS_RESTRICT'
+      EXPORTING
+        restriction = gs_restrict.
+
+    " End of range restriction.
+
+  ENDMETHOD.
 
   METHOD get_data.
 
@@ -269,6 +334,7 @@ CLASS lcl_events IMPLEMENTATION.
     get_item_texts( ).
     get_partner_data(  ).
     get_schedule_line_data(  ).
+  convert_fields(  ).
 
   ENDMETHOD.
 
@@ -659,6 +725,120 @@ CLASS lcl_events IMPLEMENTATION.
 
   ENDMETHOD.
 
+   METHOD convert_fields.
+
+    convert_kunnr( ).
+    convert_matnr( ).
+  ENDMETHOD.
+
+  METHOD convert_kunnr.
+
+    TYPES: BEGIN OF ty_kunnr_line,
+             low  TYPE vbpa-kunnr,
+             high TYPE c LENGTH 10,
+           END OF ty_kunnr_line.
+
+    DATA: lt_kunnr_map  TYPE HASHED TABLE OF ty_kunnr_line
+                        WITH UNIQUE KEY low,
+          ls_kunnr_line LIKE LINE OF         lt_kunnr_map.
+
+    FIELD-SYMBOLS: <fs_partner> TYPE ty_partner.
+    LOOP AT gt_partner ASSIGNING <fs_partner>
+      WHERE kunnr IS NOT INITIAL.
+          " Convert Internal to External Value - ECC
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+        EXPORTING
+          input         = <fs_partner>-kunnr
+       IMPORTING
+         OUTPUT        = <fs_partner>-kunnr .
+     ENDLOOP.
+
+    CHECK s_mkunnr[] IS NOT INITIAL.
+
+    LOOP AT s_mkunnr[] INTO DATA(ls_kunnr).
+      CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+        EXPORTING
+          input = ls_kunnr-low
+        IMPORTING
+          output = ls_kunnr_line-low .
+      ls_kunnr_line-high = ls_kunnr-high.
+      INSERT ls_kunnr_line INTO TABLE lt_kunnr_map.
+    ENDLOOP.
+
+    LOOP AT gt_partner ASSIGNING <fs_partner>
+      WHERE kunnr IS NOT INITIAL.
+                .
+      READ TABLE lt_kunnr_map
+        WITH TABLE KEY low = <fs_partner>-kunnr
+        INTO ls_kunnr_line.
+      IF sy-subrc = 0.
+        <fs_partner>-kunnr = ls_kunnr_line-high.
+      ELSE.
+        WRITE <fs_partner>-kunnr
+          TO <fs_partner>-kunnr.
+        "Indicate this value has not been mapped to S/4
+        CONCATENATE <fs_partner>-kunnr '-NC'
+          INTO <fs_partner>-kunnr.
+      ENDIF.
+    ENDLOOP.
+    ENDMETHOD.
+
+  METHOD convert_matnr.
+
+    TYPES:
+      BEGIN OF ty_matnr_line,
+        low  TYPE vbap-matnr,
+        high TYPE c LENGTH 18,
+      END OF ty_matnr_line.
+
+    DATA:
+      lt_matnr_map  TYPE HASHED TABLE OF ty_matnr_line
+                    WITH UNIQUE KEY low,
+      ls_matnr_line LIKE LINE OF         lt_matnr_map.
+
+    LOOP AT s_mmatnr[] INTO DATA(ls_matnr).
+      "Internal, source system value
+      CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
+        EXPORTING
+          input        = ls_matnr-low
+        IMPORTING
+          output       = ls_matnr_line-low
+        EXCEPTIONS
+          length_error = 1
+          OTHERS       = 2.
+      "External, target system value
+      ls_matnr_line-high = ls_matnr-high.
+      INSERT ls_matnr_line INTO TABLE lt_matnr_map.
+    ENDLOOP.
+
+    FIELD-SYMBOLS: <fs_item_data> TYPE ty_item_data.
+
+    LOOP AT gt_item_data ASSIGNING <fs_item_data>
+      WHERE matnr IS NOT INITIAL.
+
+      READ TABLE lt_matnr_map
+        WITH TABLE KEY low = <fs_item_data>-matnr
+        INTO ls_matnr_line.
+      IF sy-subrc = 0.
+        <fs_item_data>-matnr = ls_matnr_line-high.
+      ELSE.
+        CALL FUNCTION 'CONVERSION_EXIT_MATN1_OUTPUT'
+          EXPORTING
+            input  = <fs_item_data>-matnr
+          IMPORTING
+            output = <fs_item_data>-matnr.
+
+        IF s_mmatnr[] IS NOT INITIAL.
+          " Indicate this value has not been mapped to S/4
+          CONCATENATE <fs_item_data>-matnr '-NC'
+            INTO <fs_item_data>-matnr.
+        ENDIF.
+      ENDIF.
+
+    ENDLOOP.
+
+  ENDMETHOD.
+
   METHOD build_gui.
 
     TRY.
@@ -827,7 +1007,23 @@ CLASS lcl_events IMPLEMENTATION.
             CATCH cx_salv_not_found ##NO_HANDLER.
           ENDTRY.
         ENDLOOP.
-
+        " Conversion exits to internal values for MATNR
+        TRY.
+            lo_col ?= lo_columns->get_column( 'MATNR' ).
+            lo_col->set_edit_mask( '' ).
+            lo_col->set_short_text( 'Material' ).
+            lo_col->set_medium_text( 'Material' ).
+            lo_col->set_long_text( 'Material' ).
+          CATCH cx_salv_not_found.
+        ENDTRY.
+        TRY.
+            lo_col ?= lo_columns->get_column( 'KUNNR' ).
+            lo_col->set_edit_mask( '' ).
+            lo_col->set_short_text( 'Customer' ).
+            lo_col->set_medium_text( 'Customer' ).
+            lo_col->set_long_text( 'Customer' ).
+          CATCH cx_salv_not_found.
+        ENDTRY.
         go_salv_table->refresh( refresh_mode = if_salv_c_refresh=>soft ).
         go_salv_table->display( ).
 
@@ -837,6 +1033,9 @@ CLASS lcl_events IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
+INITIALIZATION.
+  lcl_events=>initialization( ).
 
 START-OF-SELECTION.
   lcl_events=>get_data( ).
