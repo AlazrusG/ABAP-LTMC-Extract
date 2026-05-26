@@ -270,11 +270,9 @@ CLASS lcl_events DEFINITION.
       display_data
         CHANGING
           pt_data TYPE ANY TABLE,
-      on_clicked FOR EVENT clicked OF cl_gui_container_bar_2
+      on_clicked FOR EVENT function_selected OF cl_gui_toolbar
         IMPORTING
-            id
-            container ##NEEDED
-            sender ##NEEDED
+            fcode ##NEEDED
         .
 ENDCLASS.
 
@@ -906,15 +904,32 @@ CLASS lcl_events IMPLEMENTATION.
             ( caption    = 'Item Texts'
               icon         = icon_list
               name         = 'CAP9' ) ).
-
+        DATA:
+           lt_event TYPE cntl_simple_events,
+           ls_event LIKE LINE OF lt_event.
 * Create a cl_gui_container_bar in the left splitter
         DATA(o_toolbar) =
-          NEW cl_gui_container_bar_2(
-            active_id     = 1                " Number of active entry
+          NEW cl_gui_toolbar(
             parent        = go_container_left " Place in left corner
-            captions      = it_captions
-            style = cl_gui_container_bar_2=>c_style_tile
-            close_buttons = abap_false ).   " Tool bar entries
+            display_mode = cl_gui_toolbar=>m_mode_vertical
+            name = '1'
+             ).   " Tool bar entries
+       DATA lv_fcode TYPE UI_FUNC.
+        LOOP AT it_captions INTO DATA(is_captions).
+          lv_fcode = sy-tabix.
+          o_toolbar->add_button(
+            fcode = lv_fcode
+            icon = is_captions-icon
+            text = is_captions-caption
+            butn_type = 0
+          ).
+        ENDLOOP.
+
+        ls_event-eventid = cl_gui_toolbar=>m_id_function_selected.
+        ls_event-appl_event = '' .
+        APPEND ls_event TO lt_event.
+
+        o_toolbar->set_registered_events( events = lt_event ).
 
 * Register an event handler
         SET HANDLER lcl_events=>on_clicked FOR o_toolbar.
@@ -929,7 +944,7 @@ CLASS lcl_events IMPLEMENTATION.
   ENDMETHOD.
   METHOD on_clicked.
 *    MESSAGE |Property: { id } { container->get_container_type( ) }| TYPE 'S'.
-    CASE id.
+    CASE fcode.
       WHEN 1.
         lcl_events=>display_data( CHANGING pt_data = gt_header_data ).
       WHEN 2.
