@@ -211,11 +211,10 @@ CLASS lcl_events DEFINITION FINAL.
         CHANGING
           pt_data TYPE ANY TABLE,
       build_gui,
-      on_clicked FOR EVENT clicked OF cl_gui_container_bar_2
+      on_clicked FOR EVENT function_selected OF cl_gui_toolbar
         IMPORTING
-            id
-            container ##NEEDED
-            sender ##NEEDED.
+          fcode ##NEEDED
+          .
 
 ENDCLASS.
 
@@ -324,17 +323,21 @@ CLASS lcl_events IMPLEMENTATION.
               ( vbak~trvog = '3' AND
                 vbup~lfgsa IN ('A','B') ) OR     "Overall dlv.st.
               ( vbak~trvog IN ('4','5','B') AND
-                vbup~gbsta IN ('A','B') ) ).     "Overall status
+                vbup~gbsta IN ('A','B') ) OR
+               "Include deliveries that have not yet been goods issued
+              ( vbup~lfsta = 'A' AND "Not yet delivered
+                 vbup~wbsta IN ('A','B') ) ). " Overall GM Status not processed
+
 
     get_header_data( ).
-    get_header_conditions(  ).
-    get_header_texts(  ).
-    get_item_data(  ).
-    get_item_conditions(  ).
+    get_header_conditions( ).
+    get_header_texts( ).
+    get_item_data( ).
+    get_item_conditions( ).
     get_item_texts( ).
-    get_partner_data(  ).
-    get_schedule_line_data(  ).
-  convert_fields(  ).
+    get_partner_data( ).
+    get_schedule_line_data( ).
+    convert_fields( ).
 
   ENDMETHOD.
 
@@ -882,14 +885,32 @@ CLASS lcl_events IMPLEMENTATION.
               icon         = icon_list
               name         = 'CAP8' ) ).
 
+        DATA:
+           lt_event TYPE cntl_simple_events,
+           ls_event LIKE LINE OF lt_event.
 * Create a cl_gui_container_bar in the left splitter
         DATA(o_toolbar) =
-          NEW cl_gui_container_bar_2(
-            active_id     = 1                " Number of active entry
+          NEW cl_gui_toolbar(
             parent        = go_container_left " Place in left corner
-            captions      = it_captions
-            style = cl_gui_container_bar_2=>c_style_tile "c_style_fixed
-            close_buttons = abap_false ).   " Tool bar entries
+            display_mode = cl_gui_toolbar=>m_mode_vertical
+            name = '1'
+             ).   " Tool bar entries
+       DATA lv_fcode TYPE UI_FUNC.
+        LOOP AT it_captions INTO DATA(is_captions).
+          lv_fcode = sy-tabix.
+          o_toolbar->add_button(
+            fcode = lv_fcode
+            icon = is_captions-icon
+            text = is_captions-caption
+            butn_type = 0
+          ).
+        ENDLOOP.
+
+        ls_event-eventid = cl_gui_toolbar=>m_id_function_selected.
+        ls_event-appl_event = '' .
+        APPEND ls_event TO lt_event.
+
+        o_toolbar->set_registered_events( events = lt_event ).
 
 * Register an event handler
         SET HANDLER lcl_events=>on_clicked FOR o_toolbar.
@@ -909,7 +930,7 @@ CLASS lcl_events IMPLEMENTATION.
   ENDMETHOD.
   METHOD on_clicked.
 
-    CASE id.
+    CASE fcode.
       WHEN 1. " display header data
         lcl_events=>display_data( CHANGING pt_data = gt_header_data ).
       WHEN 2. " display header conditions
