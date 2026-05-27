@@ -324,9 +324,14 @@ CLASS lcl_events IMPLEMENTATION.
                 vbup~lfgsa IN ('A','B') ) OR     "Overall dlv.st.
               ( vbak~trvog IN ('4','5','B') AND
                 vbup~gbsta IN ('A','B') ) OR
-               "Include deliveries that have not yet been goods issued
-              ( vbup~lfsta = 'A' AND "Not yet delivered
-                 vbup~wbsta IN ('A','B') ) ). " Overall GM Status not processed
+               "Include open orders with deliveries that have items
+               "-which have not been delivered.
+              ( vbup~lfsta NE 'C' AND " Delivery not completely processed
+vbup~wbsta NE 'C'  AND " Overall GM Status not processed
+EXISTS ( SELECT 1 FROM lips " There are undelivered items
+                            WHERE lips~vgbel = vbap~vbeln
+                              AND lips~vgpos = vbap~posnr
+                              AND lips~lfimg > 0 ) ) ).
 
 
     get_header_data( ).
