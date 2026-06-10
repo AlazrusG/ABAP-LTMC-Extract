@@ -213,8 +213,8 @@ CLASS lcl_events DEFINITION FINAL.
       build_gui,
       on_clicked FOR EVENT function_selected OF cl_gui_toolbar
         IMPORTING
-          fcode ##NEEDED
-          .
+            fcode ##NEEDED
+        .
 
 ENDCLASS.
 
@@ -222,7 +222,7 @@ CLASS lcl_events IMPLEMENTATION.
 
   METHOD initialization.
 
-    DATA(LV_CURRENT_PROGRAM) = CL_ABAP_SYST=>GET_CURRENT_PROGRAM( ).
+    DATA(lv_current_program) = cl_abap_syst=>get_current_program( ).
 
     " Restrict Range for converting ECC to S/4 values
     DATA: gs_restrict TYPE sscr_restrict.
@@ -259,7 +259,7 @@ CLASS lcl_events IMPLEMENTATION.
 
     CALL FUNCTION 'RS_SELOPT_NO_INTERVAL_CHECK'
       EXPORTING
-        program = LV_CURRENT_PROGRAM
+        program = lv_current_program
       TABLES
         selop   = gt_selopt.
 
@@ -302,37 +302,36 @@ CLASS lcl_events IMPLEMENTATION.
               AND vbap~werks IN @s_werks
               AND vbup~lfsta IN @s_lfsta
               AND vbup~wbsta IN @s_wbsta
-              AND vbup~lfgsa IN @s_lfgsa
               AND vbup~gbsta IN @s_gbsta
             "Logic from form VBAP_SELECT_ALL of FM RV_SALES_DOCUMENT_VIEW_3,
             "which is called within VA05.
               AND vbap~matnr NE @space AND
             "Logic from form STATUS_VBUP of FM RV_SALES_DOCUMENT_VIEW_3,
             "which is called within VA05.
-            ( ( vbak~trvog = '0' AND
-                vbup~lfgsa IN (' ','C') AND      "Overall dlv.st.
-                vbup~gbsta IN ('A','B') ) OR     "Overall status
-              ( vbak~trvog = '0' AND
-                vbup~lfgsa IN ('A','B') AND      "Overall dlv.st.
-                vbup~gbsta NE 'C' )  OR          "Overall status
-              ( vbak~trvog IN ('1','2') AND
+            ( ( vbup~lfgsa IN @s_lfgsa AND
+              ( ( vbak~trvog = '0' AND
+                  vbup~lfgsa IN (' ','C') AND      "Overall dlv.st.
+                  vbup~gbsta IN ('A','B') ) OR     "Overall status
+                ( vbak~trvog = '0' AND
+                  vbup~lfgsa IN ('A','B') AND      "Overall dlv.st.
+                  vbup~gbsta NE 'C' )  OR          "Overall status
+                ( vbak~trvog IN ('1','2') AND
                 vbup~rfgsa IN ('A','B') ) OR     "Reference stat.
-              ( vbak~trvog = '3' AND
-                vbup~lfgsa = ' ' AND             "Overall dlv.st.
-                vbup~gbsta IN ('A','B') ) OR     "Overall status
-              ( vbak~trvog = '3' AND
-                vbup~lfgsa IN ('A','B') ) OR     "Overall dlv.st.
-              ( vbak~trvog IN ('4','5','B') AND
-                vbup~gbsta IN ('A','B') ) OR
-               "Include open orders with deliveries that have items
-               "-which have not been delivered.
-              ( vbup~lfsta NE 'C' AND " Delivery not completely processed
-vbup~wbsta NE 'C'  AND " Overall GM Status not processed
-EXISTS ( SELECT 1 FROM lips " There are undelivered items
+                ( vbak~trvog = '3' AND
+                  vbup~lfgsa = ' ' AND             "Overall dlv.st.
+                  vbup~gbsta IN ('A','B') ) OR     "Overall status
+                ( vbak~trvog = '3' AND
+                  vbup~lfgsa IN ('A','B') ) OR     "Overall dlv.st.
+                ( vbak~trvog IN ('4','5','B') AND
+                  vbup~gbsta IN ('A','B') ) OR
+               " Include orders that have a delivery
+               " But that have not yet been goods issued
+               ( EXISTS ( SELECT * FROM lips " There are undelivered items
+                            INNER JOIN vbuk ON lips~vbeln = vbuk~vbeln
                             WHERE lips~vgbel = vbap~vbeln
                               AND lips~vgpos = vbap~posnr
-                              AND lips~lfimg > 0 ) ) ).
-
+                              AND vbuk~wbstk NE 'C' ) )" Goods movement st.
+                              ) ) ).
 
     get_header_data( ).
     get_header_conditions( ).
@@ -733,7 +732,7 @@ EXISTS ( SELECT 1 FROM lips " There are undelivered items
 
   ENDMETHOD.
 
-   METHOD convert_fields.
+  METHOD convert_fields.
 
     convert_kunnr( ).
     convert_matnr( ).
@@ -753,29 +752,29 @@ EXISTS ( SELECT 1 FROM lips " There are undelivered items
     FIELD-SYMBOLS: <fs_partner> TYPE ty_partner.
     LOOP AT gt_partner ASSIGNING <fs_partner>
       WHERE kunnr IS NOT INITIAL.
-          " Convert Internal to External Value - ECC
+      " Convert Internal to External Value - ECC
       CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
         EXPORTING
-          input         = <fs_partner>-kunnr
-       IMPORTING
-         OUTPUT        = <fs_partner>-kunnr .
-     ENDLOOP.
+          input  = <fs_partner>-kunnr
+        IMPORTING
+          output = <fs_partner>-kunnr.
+    ENDLOOP.
 
     CHECK s_mkunnr[] IS NOT INITIAL.
 
     LOOP AT s_mkunnr[] INTO DATA(ls_kunnr).
       CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
         EXPORTING
-          input = ls_kunnr-low
+          input  = ls_kunnr-low
         IMPORTING
-          output = ls_kunnr_line-low .
+          output = ls_kunnr_line-low.
       ls_kunnr_line-high = ls_kunnr-high.
       INSERT ls_kunnr_line INTO TABLE lt_kunnr_map.
     ENDLOOP.
 
     LOOP AT gt_partner ASSIGNING <fs_partner>
       WHERE kunnr IS NOT INITIAL.
-                .
+      .
       READ TABLE lt_kunnr_map
         WITH TABLE KEY low = <fs_partner>-kunnr
         INTO ls_kunnr_line.
@@ -789,7 +788,7 @@ EXISTS ( SELECT 1 FROM lips " There are undelivered items
           INTO <fs_partner>-kunnr.
       ENDIF.
     ENDLOOP.
-    ENDMETHOD.
+  ENDMETHOD.
 
   METHOD convert_matnr.
 
@@ -891,8 +890,8 @@ EXISTS ( SELECT 1 FROM lips " There are undelivered items
               name         = 'CAP8' ) ).
 
         DATA:
-           lt_event TYPE cntl_simple_events,
-           ls_event LIKE LINE OF lt_event.
+          lt_event TYPE cntl_simple_events,
+          ls_event LIKE LINE OF lt_event.
 * Create a cl_gui_container_bar in the left splitter
         DATA(o_toolbar) =
           NEW cl_gui_toolbar(
@@ -900,7 +899,7 @@ EXISTS ( SELECT 1 FROM lips " There are undelivered items
             display_mode = cl_gui_toolbar=>m_mode_vertical
             name = '1'
              ).   " Tool bar entries
-       DATA lv_fcode TYPE UI_FUNC.
+        DATA lv_fcode TYPE ui_func.
         LOOP AT it_captions INTO DATA(is_captions).
           lv_fcode = sy-tabix.
           o_toolbar->add_button(
